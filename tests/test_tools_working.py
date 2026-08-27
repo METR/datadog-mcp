@@ -28,7 +28,7 @@ class TestLogsToolWorking:
             "format": "table"
         }
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = sample_logs_data
             
             result = await get_logs.handle_call(sample_request)
@@ -43,7 +43,7 @@ class TestLogsToolWorking:
         """Test logs handler error handling"""
         sample_request.arguments = {"query": "test"}
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.side_effect = Exception("API error")
             
             result = await get_logs.handle_call(sample_request)
@@ -70,7 +70,7 @@ class TestTeamsToolWorking:
             "include_members": True
         }
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_teams', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_teams.fetch_teams', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = sample_teams_data
             
             result = await get_teams.handle_call(sample_request)
@@ -84,7 +84,7 @@ class TestTeamsToolWorking:
         """Test teams handler error handling"""
         sample_request.arguments = {}
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_teams', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_teams.fetch_teams', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.side_effect = Exception("Teams API error")
             
             result = await get_teams.handle_call(sample_request)
@@ -115,7 +115,7 @@ class TestMetricsToolWorking:
             "format": "table"
         }
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_metrics', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_metrics.fetch_metrics', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = sample_metrics_data
             
             result = await get_metrics.handle_call(sample_request)
@@ -138,12 +138,14 @@ class TestMetricsToolWorking:
             "format": "list"
         }
         
-        mock_metrics_list = [
-            {"metric": "system.cpu.user", "tags": ["host", "env"]},
-            {"metric": "aws.apigateway.count", "tags": ["service"]}
-        ]
+        mock_metrics_list = {
+            "data": [
+                {"id": "system.cpu.user", "type": "metrics"},
+                {"id": "aws.apigateway.count", "type": "metrics"},
+            ]
+        }
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_metrics_list', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.list_metrics.fetch_metrics_list', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = mock_metrics_list
             
             result = await list_metrics.handle_call(sample_request)
@@ -163,7 +165,7 @@ class TestToolParameterValidation:
         request = type('Request', (), {})()
         request.arguments = {}  # Empty arguments
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = []
             
             result = await handle_call(request)
@@ -179,7 +181,7 @@ class TestToolParameterValidation:
         request = type('Request', (), {})()
         request.arguments = {"metric_name": "system.cpu.user"}
         
-        with patch('datadog_mcp.utils.datadog_client.fetch_metrics', new_callable=AsyncMock) as mock_fetch:
+        with patch('datadog_mcp.tools.get_metrics.fetch_metrics', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.return_value = {"data": {"attributes": {"series": []}}}
             
             result = await handle_call(request)
@@ -193,10 +195,11 @@ class TestDataFormatting:
     def test_basic_data_structures(self, sample_logs_data, sample_metrics_data, sample_teams_data):
         """Test that sample data has expected structure"""
         # Logs data
-        assert isinstance(sample_logs_data, list)
-        assert len(sample_logs_data) > 0
-        assert "message" in sample_logs_data[0]
-        assert "timestamp" in sample_logs_data[0]
+        assert isinstance(sample_logs_data, dict)
+        assert len(sample_logs_data["data"]) > 0
+        first = sample_logs_data["data"][0]["attributes"]
+        assert "message" in first
+        assert "timestamp" in first
         
         # Metrics data
         assert "data" in sample_metrics_data
@@ -204,9 +207,9 @@ class TestDataFormatting:
         assert "series" in sample_metrics_data["data"]["attributes"]
         
         # Teams data
-        assert "teams" in sample_teams_data
-        assert "users" in sample_teams_data
-        assert len(sample_teams_data["teams"]) > 0
+        assert "data" in sample_teams_data
+        assert len(sample_teams_data["data"]) > 0
+        assert "attributes" in sample_teams_data["data"][0]
     
     def test_json_serialization(self, sample_logs_data):
         """Test that data can be JSON serialized"""
@@ -242,20 +245,20 @@ class TestActualAPIFunctions:
     
     @pytest.mark.asyncio
     async def test_api_functions_callable(self, mock_httpx_client, mock_env_credentials):
-        """Test that API functions can be called without errors"""
+        """Test that the httpx-backed API functions can be called without errors"""
         from datadog_mcp.utils import datadog_client
-        
-        # Test fetch_logs
-        result = await datadog_client.fetch_logs()
-        assert isinstance(result, list)
-        
-        # Test fetch_teams  
-        result = await datadog_client.fetch_teams()
-        assert isinstance(result, dict)
-        
-        # Test fetch_ci_pipelines
-        result = await datadog_client.fetch_ci_pipelines()
-        assert isinstance(result, list)
+
+        assert isinstance(await datadog_client.fetch_teams(), dict)
+        assert isinstance(await datadog_client.fetch_ci_pipelines(), dict)
+        assert isinstance(await datadog_client.fetch_metrics_list(), dict)
+
+    @pytest.mark.asyncio
+    async def test_fetch_logs_callable(self, mock_logs_api, mock_env_credentials):
+        """Test that the SDK-backed logs function can be called without errors"""
+        from datadog_mcp.utils import datadog_client
+
+        with mock_logs_api():
+            assert isinstance(await datadog_client.fetch_logs(), dict)
 
 
 if __name__ == "__main__":

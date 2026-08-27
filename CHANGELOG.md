@@ -19,9 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Renamed model fields to their SDK 2.x names: `inputSchema` -> `input_schema`,
     `isError` -> `is_error`
 
+- **Dependency Updates**
+  - `datadog-api-client` >= 2.59.0, `pytest` >= 9.1.1, `pytest-asyncio` >= 1.4.0,
+    `pytest-mock` >= 3.15.1
+
 ### Fixed
 - `get_logs_field_values` no longer raises `AttributeError` when called with no arguments
 - Unknown tool names now return `is_error=True` instead of a successful result
+- Test suite no longer issues real Datadog API calls. Handler tests patched
+  `datadog_mcp.utils.datadog_client.<fn>`, but the tool modules bind those names at
+  import time, so the patches never applied and the tests hit the live API. They now
+  patch the name in the tool module that uses it.
+- Mocked httpx clients now use `AsyncMock` for `get`/`post`, which the client awaits
+- Test fixtures now match the payloads the client actually returns: the Datadog v2
+  `{"data": [...]}` envelope rather than invented `{"teams": ..., "users": ...}` and
+  bare-list shapes, and assertions target the real function signatures
+- Logs tests mock the Datadog SDK that `fetch_logs` uses instead of `httpx`
 
 ## [v0.0.6] - 2025-07-14
 

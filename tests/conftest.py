@@ -2,6 +2,7 @@
 Pytest configuration and shared fixtures
 """
 
+import contextlib
 import pytest
 import os
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -22,11 +23,55 @@ def mock_httpx_client():
         mock_response = MagicMock()
         mock_response.json.return_value = {"data": []}
         mock_response.raise_for_status.return_value = None
-        
-        mock_client.return_value.__aenter__.return_value.get.return_value = mock_response
-        mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
-        
+
+        # `get`/`post` are awaited by the client, so they need AsyncMock
+        client = mock_client.return_value.__aenter__.return_value
+        client.get = AsyncMock(return_value=mock_response)
+        client.post = AsyncMock(return_value=mock_response)
+
         yield mock_client
+
+
+@pytest.fixture
+def httpx_json():
+    """Factory patching the async httpx client so requests return a JSON payload."""
+
+    @contextlib.contextmanager
+    def _patch(payload, status_error=None):
+        with patch('datadog_mcp.utils.datadog_client.httpx.AsyncClient') as mock_client:
+            response = MagicMock()
+            response.json.return_value = payload
+            if status_error is None:
+                response.raise_for_status.return_value = None
+            else:
+                response.raise_for_status.side_effect = status_error
+
+            client = mock_client.return_value.__aenter__.return_value
+            client.get = AsyncMock(return_value=response)
+            client.post = AsyncMock(return_value=response)
+            yield mock_client
+
+    return _patch
+
+
+@pytest.fixture
+def mock_logs_api():
+    """Factory patching the Datadog SDK logs API behind fetch_logs."""
+
+    @contextlib.contextmanager
+    def _patch(log_dicts=(), meta=None):
+        with patch('datadog_mcp.utils.datadog_client.ApiClient'), \
+             patch('datadog_mcp.utils.datadog_client.LogsApi') as mock_api:
+            response = MagicMock()
+            response.data = [
+                MagicMock(**{"to_dict.return_value": d}) for d in log_dicts
+            ]
+            response.meta = MagicMock(**{"to_dict.return_value": meta or {}})
+            response.links = None
+            mock_api.return_value.list_logs.return_value = response
+            yield mock_api.return_value
+
+    return _patch
 
 
 @pytest.fixture
@@ -39,23 +84,30 @@ def sample_request():
 
 @pytest.fixture
 def sample_logs_data():
-    """Sample logs data for testing"""
-    return [
-        {
-            "timestamp": "2023-01-01T12:00:00Z",
-            "message": "Test log message",
-            "service": "test-service",
-            "status": "info",
-            "host": "test-host"
-        },
-        {
-            "timestamp": "2023-01-01T12:01:00Z", 
-            "message": "Error occurred",
-            "service": "test-service",
-            "status": "error",
-            "host": "test-host"
-        }
-    ]
+    """Sample response in the shape `fetch_logs` returns"""
+    return {
+        "data": [
+            {
+                "attributes": {
+                    "timestamp": "2023-01-01T12:00:00Z",
+                    "message": "Test log message",
+                    "service": "test-service",
+                    "status": "info",
+                    "host": "test-host",
+                }
+            },
+            {
+                "attributes": {
+                    "timestamp": "2023-01-01T12:01:00Z",
+                    "message": "Error occurred",
+                    "service": "test-service",
+                    "status": "error",
+                    "host": "test-host",
+                }
+            },
+        ],
+        "meta": {"page": {"after": "next-cursor"}},
+    }
 
 
 @pytest.fixture
@@ -81,22 +133,19 @@ def sample_metrics_data():
 
 @pytest.fixture
 def sample_teams_data():
-    """Sample teams data for testing"""
+    """Sample response in the shape `fetch_teams` returns"""
     return {
-        "teams": [
+        "data": [
             {
                 "id": "team-123",
-                "name": "Backend Team",
-                "handle": "backend-team",
-                "description": "Backend development team"
+                "type": "team",
+                "attributes": {
+                    "name": "Backend Team",
+                    "handle": "backend-team",
+                    "description": "Backend development team",
+                    "created_at": "2024-01-01T00:00:00Z",
+                },
             }
         ],
-        "users": [
-            {
-                "id": "user-1",
-                "name": "John Doe",
-                "email": "john@example.com",
-                "teams": ["team-123"]
-            }
-        ]
+        "meta": {"pagination": {"total_count": 1, "total_pages": 1}},
     }
