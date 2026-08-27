@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_metrics",
         description="Execute metric queries on Datadog. Specify the metric name and optional filters/aggregations to build and execute the query.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "metric_name": {
@@ -67,10 +67,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_metrics tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         metric_name = args.get("metric_name")
         time_range = args.get("time_range", "1h")
@@ -86,7 +86,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if not metric_name:
             return CallToolResult(
                 content=[TextContent(type="text", text="Error: metric_name parameter is required")],
-                isError=True,
+                is_error=True,
             )
         
         # Fetch metrics data
@@ -117,7 +117,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
             
             return CallToolResult(
                 content=[TextContent(type="text", text=suggestion_msg)],
-                isError=False,
+                is_error=False,
             )
         
         # Format output
@@ -141,11 +141,11 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=final_content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

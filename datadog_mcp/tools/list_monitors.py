@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="list_monitors",
         description="List all monitors from Datadog. Monitors are used for alerting on metrics, logs, and other data.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "tags": {
@@ -62,10 +62,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the list_monitors tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         tags = args.get("tags", "")
         name = args.get("name", "")
@@ -86,7 +86,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if not monitors:
             return CallToolResult(
                 content=[TextContent(type="text", text="No monitors found")],
-                isError=False,
+                is_error=False,
             )
         
         # Format output
@@ -161,12 +161,12 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         logger.error(f"Error in list_monitors: {e}")
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

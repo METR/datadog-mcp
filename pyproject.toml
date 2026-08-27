@@ -1,13 +1,13 @@
 [project]
 name = "datadog-mcp"
-version = "0.0.6"
+version = "0.0.7"
 description = "Datadog MCP server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "datadog-api-client>=2.39.0",
     "httpx>=0.28.1",
-    "mcp>=1.9.4",
+    "mcp>=2.1.1",
 ]
 
 [project.optional-dependencies]

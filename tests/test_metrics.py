@@ -19,9 +19,9 @@ class TestMetricsToolDefinitions:
         
         assert tool_def.name == "get_metrics"
         assert "metric" in tool_def.description.lower()
-        assert hasattr(tool_def, 'inputSchema')
+        assert hasattr(tool_def, 'input_schema')
         
-        schema = tool_def.inputSchema
+        schema = tool_def.input_schema
         assert "properties" in schema
         
         properties = schema["properties"] 
@@ -43,9 +43,9 @@ class TestMetricsToolDefinitions:
         
         assert tool_def.name == "get_metric_fields"
         assert "field" in tool_def.description.lower()
-        assert hasattr(tool_def, 'inputSchema')
+        assert hasattr(tool_def, 'input_schema')
         
-        schema = tool_def.inputSchema
+        schema = tool_def.input_schema
         properties = schema["properties"]
         assert "metric_name" in properties
     
@@ -188,7 +188,7 @@ class TestMetricsToolHandlers:
             result = await get_metrics.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             assert isinstance(result.content[0], TextContent)
             
@@ -215,7 +215,7 @@ class TestMetricsToolHandlers:
             result = await list_metrics.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
     
     @pytest.mark.asyncio
@@ -234,7 +234,7 @@ class TestMetricsToolHandlers:
             result = await get_metric_fields.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             
             content_text = result.content[0].text
@@ -258,7 +258,7 @@ class TestMetricsToolHandlers:
             result = await get_metric_field_values.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             
             content_text = result.content[0].text
@@ -279,7 +279,7 @@ class TestMetricsToolHandlers:
             result = await get_metrics.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is True
+            assert result.is_error is True
             assert "error" in result.content[0].text.lower()
 
 
@@ -414,7 +414,7 @@ class TestMetricsValidation:
         
         # Should handle gracefully (either error or validation message)
         assert isinstance(result, CallToolResult)
-        if result.isError:
+        if result.is_error:
             assert len(result.content) > 0
     
     @pytest.mark.asyncio

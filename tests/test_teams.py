@@ -19,10 +19,10 @@ class TestTeamsToolDefinition:
         
         assert tool_def.name == "get_teams"
         assert "team" in tool_def.description.lower()
-        assert hasattr(tool_def, 'inputSchema')
+        assert hasattr(tool_def, 'input_schema')
         
         # Check schema structure
-        schema = tool_def.inputSchema
+        schema = tool_def.input_schema
         assert "properties" in schema
         
         properties = schema["properties"]
@@ -201,7 +201,7 @@ class TestTeamsToolHandler:
             result = await get_teams.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             assert isinstance(result.content[0], TextContent)
             
@@ -236,7 +236,7 @@ class TestTeamsToolHandler:
             result = await get_teams.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             
             # Verify specific team was requested
             mock_fetch.assert_called_once()
@@ -269,7 +269,7 @@ class TestTeamsToolHandler:
             result = await get_teams.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             
             content_text = result.content[0].text
             # Should be valid JSON when format is json
@@ -293,7 +293,7 @@ class TestTeamsToolHandler:
             result = await get_teams.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is True
+            assert result.is_error is True
             assert len(result.content) > 0
             assert "error" in result.content[0].text.lower()
     
@@ -316,7 +316,7 @@ class TestTeamsToolHandler:
             result = await get_teams.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             
             content_text = result.content[0].text
@@ -481,7 +481,7 @@ class TestTeamsValidation:
         
         # Should handle gracefully (either error or validation message)
         assert isinstance(result, CallToolResult)
-        if result.isError:
+        if result.is_error:
             assert len(result.content) > 0
     
     @pytest.mark.asyncio

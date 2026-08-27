@@ -7,25 +7,29 @@ Provides tools to query Datadog CI pipelines with filtering capabilities.
 
 import asyncio
 import logging
-from typing import List
 
-from mcp.server import Server
-from mcp.server.models import InitializationOptions
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, ServerCapabilities, TextContent
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+)
 
 from .tools import get_fingerprints, list_pipelines, get_logs, get_teams, get_metrics, get_metric_fields, get_metric_field_values, list_metrics, list_service_definitions, get_service_definition, list_monitors, list_slos, get_logs_field_values
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, 
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     force=True
 )
 logger = logging.getLogger("datadog-mcp-server")
 
-# Create MCP server instance
-server = Server("datadog-mcp-server")
+SERVER_NAME = "datadog-mcp-server"
+SERVER_VERSION = "1.0.0"
 
 # Tool registry
 TOOLS = {
@@ -84,37 +88,45 @@ TOOLS = {
 }
 
 
-@server.list_tools()
-async def handle_list_tools() -> List[Tool]:
+async def handle_list_tools(
+    ctx: ServerRequestContext,
+    params: PaginatedRequestParams | None,
+) -> ListToolsResult:
     """List available tools."""
-    return [tool_config["definition"]() for tool_config in TOOLS.values()]
+    return ListToolsResult(
+        tools=[tool_config["definition"]() for tool_config in TOOLS.values()]
+    )
 
 
-@server.call_tool()
-async def handle_call_tool(name: str, arguments: dict):
+async def handle_call_tool(
+    ctx: ServerRequestContext,
+    params: CallToolRequestParams,
+) -> CallToolResult:
     """Handle tool calls."""
+    tool_config = TOOLS.get(params.name)
+    if tool_config is None:
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"Unknown tool: {params.name}")],
+            is_error=True,
+        )
+
     try:
-        if name in TOOLS:
-            # Create mock request for compatibility with existing tools
-            class MockRequest:
-                def __init__(self, name, arguments):
-                    self.name = name
-                    self.arguments = arguments
-            
-            handler = TOOLS[name]["handler"]
-            request = MockRequest(name, arguments)
-            result = await handler(request)
-            
-            # Extract content from CallToolResult and return as list
-            if hasattr(result, 'content'):
-                return result.content
-            else:
-                return [TextContent(type="text", text="Unexpected response format")]
-        else:
-            return [TextContent(type="text", text=f"Unknown tool: {name}")]
+        return await tool_config["handler"](params)
     except Exception as e:
         logger.error(f"Error handling tool call: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+        return CallToolResult(
+            content=[TextContent(type="text", text=f"Error: {str(e)}")],
+            is_error=True,
+        )
+
+
+# Create MCP server instance
+server = Server(
+    SERVER_NAME,
+    version=SERVER_VERSION,
+    on_list_tools=handle_list_tools,
+    on_call_tool=handle_call_tool,
+)
 
 
 async def async_main():
@@ -127,13 +139,7 @@ async def async_main():
             await server.run(
                 read_stream,
                 write_stream,
-                InitializationOptions(
-                    server_name="datadog-mcp-server",
-                    server_version="1.0.0",
-                    capabilities=ServerCapabilities(
-                        tools={}
-                    ),
-                ),
+                server.create_initialization_options(),
             )
     except Exception as e:
         logger.error(f"Server startup failed: {e}")

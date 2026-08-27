@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="list_metrics",
         description="List all available metrics from Datadog. Useful for discovering metrics before querying them with get_metrics.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "filter": {
@@ -51,10 +51,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the list_metrics tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         filter_query = args.get("filter", "")
         limit = args.get("limit", 50)
@@ -71,7 +71,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if "data" not in metrics_response:
             return CallToolResult(
                 content=[TextContent(type="text", text="No metrics data returned from API")],
-                isError=True,
+                is_error=True,
             )
         
         metrics = metrics_response["data"]
@@ -136,12 +136,12 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         logger.error(f"Error in list_metrics: {e}")
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

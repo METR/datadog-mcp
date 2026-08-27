@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_logs",
         description="Search and retrieve logs from Datadog with flexible filtering parameters. Similar to get_metrics but for log data.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "time_range": {
@@ -63,10 +63,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_logs tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         time_range = args.get("time_range", "1h")
         filters = args.get("filters", {})
@@ -102,7 +102,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
             
             return CallToolResult(
                 content=[TextContent(type="text", text=suggestion_msg)],
-                isError=False,
+                is_error=False,
             )
         
         # Format output
@@ -142,11 +142,11 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=final_content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

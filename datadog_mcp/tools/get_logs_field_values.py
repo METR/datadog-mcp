@@ -18,7 +18,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_logs_field_values",
         description="Get possible values for a specific log field to understand filtering options",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "field_name": {
@@ -54,21 +54,22 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: types.CallToolRequest) -> CallToolResult:
+async def handle_call(params: types.CallToolRequestParams) -> CallToolResult:
     """Handle the get_logs_field_values tool call."""
     try:
         # Extract parameters
-        field_name = request.arguments.get("field_name")
-        time_range = request.arguments.get("time_range", "1h")
-        query = request.arguments.get("query")
-        limit = request.arguments.get("limit", 100)
-        format_type = request.arguments.get("format", "table")
+        args = params.arguments or {}
+        field_name = args.get("field_name")
+        time_range = args.get("time_range", "1h")
+        query = args.get("query")
+        limit = args.get("limit", 100)
+        format_type = args.get("format", "table")
         
         # Validate required parameters
         if not field_name:
             return CallToolResult(
                 content=[TextContent(type="text", text="Error: field_name is required")],
-                isError=True,
+                is_error=True,
             )
         
         # Fetch field values
@@ -90,14 +91,14 @@ async def handle_call(request: types.CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
     
     except Exception as e:
         logger.error(f"Error in get_logs_field_values: {e}")
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error discovering field values: {str(e)}")],
-            isError=True,
+            is_error=True,
         )
 
 

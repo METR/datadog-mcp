@@ -19,10 +19,10 @@ class TestLogToolDefinition:
         
         assert tool_def.name == "get_logs"
         assert "logs" in tool_def.description.lower()
-        assert hasattr(tool_def, 'inputSchema')
+        assert hasattr(tool_def, 'input_schema')
         
         # Check required schema properties
-        schema = tool_def.inputSchema
+        schema = tool_def.input_schema
         assert "properties" in schema
         
         # Should have common parameters
@@ -131,7 +131,7 @@ class TestLogToolHandler:
             result = await get_logs.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             assert isinstance(result.content[0], TextContent)
             
@@ -164,7 +164,7 @@ class TestLogToolHandler:
             result = await get_logs.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             
             content_text = result.content[0].text
             # Should be valid JSON when format is json
@@ -189,7 +189,7 @@ class TestLogToolHandler:
             result = await get_logs.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is True
+            assert result.is_error is True
             assert len(result.content) > 0
             assert "error" in result.content[0].text.lower()
     
@@ -208,7 +208,7 @@ class TestLogToolHandler:
             result = await get_logs.handle_call(mock_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             
             content_text = result.content[0].text

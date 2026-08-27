@@ -16,7 +16,7 @@ class TestLogsToolWorking:
         tool_def = get_logs.get_tool_definition()
         assert tool_def.name == "get_logs"
         assert "log" in tool_def.description.lower()
-        assert "properties" in tool_def.inputSchema
+        assert "properties" in tool_def.input_schema
     
     @pytest.mark.asyncio
     async def test_logs_handler_success(self, sample_request, sample_logs_data, mock_env_credentials):
@@ -34,7 +34,7 @@ class TestLogsToolWorking:
             result = await get_logs.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
             assert isinstance(result.content[0], TextContent)
     
@@ -49,7 +49,7 @@ class TestLogsToolWorking:
             result = await get_logs.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is True
+            assert result.is_error is True
             assert "error" in result.content[0].text.lower()
 
 
@@ -76,7 +76,7 @@ class TestTeamsToolWorking:
             result = await get_teams.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
     
     @pytest.mark.asyncio
@@ -90,7 +90,7 @@ class TestTeamsToolWorking:
             result = await get_teams.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is True
+            assert result.is_error is True
 
 
 class TestMetricsToolWorking:
@@ -102,7 +102,7 @@ class TestMetricsToolWorking:
         assert tool_def.name == "get_metrics"
         assert "metric" in tool_def.description.lower()
         
-        properties = tool_def.inputSchema["properties"]
+        properties = tool_def.input_schema["properties"]
         assert "metric_name" in properties
     
     @pytest.mark.asyncio
@@ -121,7 +121,7 @@ class TestMetricsToolWorking:
             result = await get_metrics.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
             assert len(result.content) > 0
     
     def test_list_metrics_tool_definition(self):
@@ -149,7 +149,7 @@ class TestMetricsToolWorking:
             result = await list_metrics.handle_call(sample_request)
             
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
+            assert result.is_error is False
 
 
 class TestToolParameterValidation:

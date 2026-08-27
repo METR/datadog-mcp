@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.0.7] - 2026-08-27
+
+### Changed
+- **MCP SDK 2.x support**
+  - Requires `mcp>=2.1.1`; the server no longer starts on the 1.x SDK
+  - Replaced the removed `@server.list_tools()` / `@server.call_tool()` decorators with the
+    `on_list_tools` / `on_call_tool` constructor handlers
+  - Tool handlers now receive `CallToolRequestParams` directly and return `CallToolResult`
+    unchanged, removing the internal `MockRequest` shim and content-unwrapping
+  - Server capabilities are derived via `create_initialization_options()` instead of being
+    hand-built
+  - Renamed model fields to their SDK 2.x names: `inputSchema` -> `input_schema`,
+    `isError` -> `is_error`
+
+### Fixed
+- `get_logs_field_values` no longer raises `AttributeError` when called with no arguments
+- Unknown tool names now return `is_error=True` instead of a successful result
+
 ## [v0.0.6] - 2025-07-14
 
 ### Added

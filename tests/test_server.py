@@ -7,7 +7,7 @@ import asyncio
 import os
 from unittest.mock import patch, MagicMock, AsyncMock
 from datadog_mcp.server import server, TOOLS, handle_list_tools, handle_call_tool
-from mcp.types import Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 
 class TestServerConfiguration:
@@ -50,8 +50,9 @@ class TestToolHandling:
     @pytest.mark.asyncio
     async def test_handle_list_tools(self):
         """Test that handle_list_tools returns proper Tool objects"""
-        tools = await handle_list_tools()
-        
+        result = await handle_list_tools(None, None)
+        tools = result.tools
+
         assert isinstance(tools, list)
         assert len(tools) > 0
         
@@ -64,38 +65,45 @@ class TestToolHandling:
     @pytest.mark.asyncio
     async def test_handle_call_tool_unknown_tool(self):
         """Test handling of unknown tool calls"""
-        result = await handle_call_tool("nonexistent_tool", {})
-        
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
-        assert "Unknown tool" in result[0].text
+        result = await handle_call_tool(
+            None, CallToolRequestParams(name="nonexistent_tool", arguments={})
+        )
+
+        assert result.is_error
+        assert len(result.content) == 1
+        assert isinstance(result.content[0], TextContent)
+        assert "Unknown tool" in result.content[0].text
     
     @pytest.mark.asyncio
     async def test_handle_call_tool_with_mock_handler(self):
         """Test successful tool call with mocked handler"""
         # Mock a tool handler that returns expected result
-        mock_result = MagicMock()
-        mock_result.content = [TextContent(type="text", text="Test result")]
-        
+        mock_result = CallToolResult(
+            content=[TextContent(type="text", text="Test result")], is_error=False
+        )
+
         mock_handler = AsyncMock(return_value=mock_result)
-        
+
         # Temporarily patch TOOLS
         original_tools = TOOLS.copy()
         TOOLS["test_tool"] = {
-            "definition": lambda: Tool(name="test_tool", description="Test tool"),
+            "definition": lambda: Tool(
+                name="test_tool", description="Test tool", input_schema={"type": "object"}
+            ),
             "handler": mock_handler
         }
-        
+
         try:
-            result = await handle_call_tool("test_tool", {"param": "value"})
-            
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert isinstance(result[0], TextContent)
-            assert result[0].text == "Test result"
-            
-            # Verify handler was called with proper request structure
+            result = await handle_call_tool(
+                None, CallToolRequestParams(name="test_tool", arguments={"param": "value"})
+            )
+
+            assert not result.is_error
+            assert len(result.content) == 1
+            assert isinstance(result.content[0], TextContent)
+            assert result.content[0].text == "Test result"
+
+            # Verify handler was called with the request params
             mock_handler.assert_called_once()
             call_args = mock_handler.call_args[0][0]
             assert call_args.name == "test_tool"
@@ -114,17 +122,21 @@ class TestToolHandling:
         
         original_tools = TOOLS.copy()
         TOOLS["error_tool"] = {
-            "definition": lambda: Tool(name="error_tool", description="Error tool"),
+            "definition": lambda: Tool(
+                name="error_tool", description="Error tool", input_schema={"type": "object"}
+            ),
             "handler": mock_handler
         }
-        
+
         try:
-            result = await handle_call_tool("error_tool", {})
-            
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert isinstance(result[0], TextContent)
-            assert "Error: Test error" in result[0].text
+            result = await handle_call_tool(
+                None, CallToolRequestParams(name="error_tool", arguments={})
+            )
+
+            assert result.is_error
+            assert len(result.content) == 1
+            assert isinstance(result.content[0], TextContent)
+            assert "Error: Test error" in result.content[0].text
             
         finally:
             TOOLS.clear()
@@ -143,8 +155,8 @@ class TestServerIntegration:
     async def test_server_tool_integration(self):
         """Test integration between server and tool system"""
         # Test that we can list tools and they match our TOOLS registry
-        tools = await handle_list_tools()
-        tool_names = [tool.name for tool in tools]
+        result = await handle_list_tools(None, None)
+        tool_names = [tool.name for tool in result.tools]
         
         # Should have same number of tools as registered
         assert len(tool_names) == len(TOOLS)
