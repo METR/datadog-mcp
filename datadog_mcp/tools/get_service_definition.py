@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_service_definition",
         description="Retrieve the definition of a specific service from Datadog. Service definitions contain metadata, ownership, and configuration details for individual services.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "service_name": {
@@ -44,16 +44,16 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_service_definition tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         service_name = args.get("service_name")
         if not service_name:
             return CallToolResult(
                 content=[TextContent(type="text", text="Error: service_name is required")],
-                isError=True,
+                is_error=True,
             )
         
         schema_version = args.get("schema_version", "v2.2")
@@ -68,7 +68,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if "data" not in service_definition_response:
             return CallToolResult(
                 content=[TextContent(type="text", text=f"No service definition found for '{service_name}'")],
-                isError=True,
+                is_error=True,
             )
         
         service_definition = service_definition_response["data"]
@@ -177,12 +177,12 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         logger.error(f"Error in get_service_definition: {e}")
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

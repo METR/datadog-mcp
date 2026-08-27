@@ -5,7 +5,7 @@ List CI pipelines tool
 import json
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 from ..utils.datadog_client import fetch_ci_pipelines
 from ..utils.formatters import extract_pipeline_info, format_as_table
@@ -16,7 +16,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="list_ci_pipelines",
         description="List CI pipelines from Datadog CI Visibility with optional filtering",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "repository": {
@@ -58,10 +58,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the list_ci_pipelines tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         repository = args.get("repository")
         pipeline_name = args.get("pipeline_name")
@@ -107,11 +107,11 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

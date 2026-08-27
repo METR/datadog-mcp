@@ -4,7 +4,7 @@ Get pipeline fingerprints tool
 
 from typing import Any, Dict, List
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 from ..utils.datadog_client import fetch_ci_pipelines
 from ..utils.formatters import extract_pipeline_info, format_as_table
@@ -15,7 +15,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_pipeline_fingerprints",
         description="Get unique pipeline fingerprints for specific repositories/services",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "repositories": {
@@ -53,10 +53,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_pipeline_fingerprints tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         repositories = args.get("repositories", [])
         pipeline_name = args.get("pipeline_name")
@@ -67,7 +67,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if not repositories:
             return CallToolResult(
                 content=[TextContent(type="text", text="Error: repositories parameter is required")],
-                isError=True,
+                is_error=True,
             )
         
         all_pipelines = []
@@ -109,11 +109,11 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

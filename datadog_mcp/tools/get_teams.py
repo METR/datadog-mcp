@@ -5,7 +5,7 @@ Get teams and their members tool
 import json
 from typing import Any, Dict, List
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 from ..utils.datadog_client import fetch_teams, fetch_team_memberships
 from ..utils.formatters import (
@@ -21,7 +21,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_teams",
         description="Get Datadog teams and their members",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "team_name": {
@@ -58,10 +58,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_teams tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         team_name = args.get("team_name")
         include_members = args.get("include_members", True)
@@ -81,7 +81,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if not teams:
             return CallToolResult(
                 content=[TextContent(type="text", text="No teams found.")],
-                isError=False,
+                is_error=False,
             )
         
         # Filter by team name if specified
@@ -90,7 +90,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
             if not teams:
                 return CallToolResult(
                     content=[TextContent(type="text", text=f"No teams found matching '{team_name}'.")],
-                    isError=False,
+                    is_error=False,
                 )
         
         # If detailed format or specific team, get members
@@ -164,11 +164,11 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=final_content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

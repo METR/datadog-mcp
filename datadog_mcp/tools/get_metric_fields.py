@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any, Dict
 
-from mcp.types import CallToolRequest, CallToolResult, Tool, TextContent
+from mcp.types import CallToolRequestParams, CallToolResult, Tool, TextContent
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def get_tool_definition() -> Tool:
     return Tool(
         name="get_metric_fields",
         description="Get available fields/tags for a specific metric from Datadog to help with aggregation queries",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "metric_name": {
@@ -44,10 +44,10 @@ def get_tool_definition() -> Tool:
     )
 
 
-async def handle_call(request: CallToolRequest) -> CallToolResult:
+async def handle_call(params: CallToolRequestParams) -> CallToolResult:
     """Handle the get_metric_fields tool call."""
     try:
-        args = request.arguments or {}
+        args = params.arguments or {}
         
         metric_name = args.get("metric_name")
         time_range = args.get("time_range", "1h")
@@ -56,7 +56,7 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         if not metric_name:
             return CallToolResult(
                 content=[TextContent(type="text", text="Error: metric_name parameter is required")],
-                isError=True,
+                is_error=True,
             )
         
         # Fetch available fields
@@ -89,12 +89,12 @@ async def handle_call(request: CallToolRequest) -> CallToolResult:
         
         return CallToolResult(
             content=[TextContent(type="text", text=content)],
-            isError=False,
+            is_error=False,
         )
         
     except Exception as e:
         logger.error(f"Error in get_metric_fields: {e}")
         return CallToolResult(
             content=[TextContent(type="text", text=f"Error: {str(e)}")],
-            isError=True,
+            is_error=True,
         )

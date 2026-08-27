@@ -9,6 +9,21 @@ from datadog_mcp.tools import get_logs
 from datadog_mcp.utils import datadog_client
 from mcp.types import CallToolResult, TextContent
 
+LOGS_PAYLOAD = {
+    "data": [
+        {
+            "attributes": {
+                "timestamp": "2023-01-01T12:00:00Z",
+                "message": "Error in application",
+                "service": "web-app",
+                "status": "error",
+                "host": "web-01",
+            }
+        }
+    ],
+    "meta": {"page": {"after": "next-cursor"}},
+}
+
 
 class TestLogToolDefinition:
     """Test the get_logs tool definition"""
@@ -19,10 +34,10 @@ class TestLogToolDefinition:
         
         assert tool_def.name == "get_logs"
         assert "logs" in tool_def.description.lower()
-        assert hasattr(tool_def, 'inputSchema')
+        assert hasattr(tool_def, 'input_schema')
         
         # Check required schema properties
-        schema = tool_def.inputSchema
+        schema = tool_def.input_schema
         assert "properties" in schema
         
         # Should have common parameters
@@ -34,79 +49,55 @@ class TestLogToolDefinition:
 
 class TestLogRetrieval:
     """Test log retrieval functionality"""
-    
+
     @pytest.mark.asyncio
-    async def test_fetch_logs_basic(self):
+    async def test_fetch_logs_basic(self, mock_logs_api):
         """Test basic log fetching functionality"""
-        # Mock the HTTP response
-        mock_response_data = {
-            "data": [
-                {
-                    "attributes": {
-                        "timestamp": "2023-01-01T12:00:00Z",
-                        "message": "Test log message",
-                        "service": "test-service",
-                        "status": "info"
-                    }
-                }
-            ],
-            "meta": {
-                "page": {
-                    "after": "next_cursor"
-                }
-            }
-        }
-        
-        with patch('datadog_mcp.utils.datadog_client.httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.return_value.json.return_value = mock_response_data
-            mock_client.return_value.__aenter__.return_value.post.return_value.raise_for_status.return_value = None
-            
+        log = LOGS_PAYLOAD["data"][0]
+
+        with mock_logs_api([log], meta={"page": {"after": "next_cursor"}}) as api:
             result = await datadog_client.fetch_logs()
-            
-            assert isinstance(result, list)
-            assert len(result) > 0
-            assert "message" in result[0]
-    
-    @pytest.mark.asyncio 
-    async def test_fetch_logs_with_filters(self):
-        """Test log fetching with filters"""
+
+            assert isinstance(result, dict)
+            assert result["data"] == [log]
+            assert result["meta"]["page"]["after"] == "next_cursor"
+            api.list_logs.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_fetch_logs_with_filters(self, mock_logs_api):
+        """Test that filters are combined into the query string"""
         filters = {
             "service": "web-app",
             "env": "production",
-            "status": "error"
+            "status": "error",
         }
-        
-        mock_response_data = {
-            "data": [
-                {
-                    "attributes": {
-                        "timestamp": "2023-01-01T12:00:00Z",
-                        "message": "Error occurred",
-                        "service": "web-app",
-                        "status": "error"
-                    }
-                }
-            ]
-        }
-        
-        with patch('datadog_mcp.utils.datadog_client.httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.return_value.json.return_value = mock_response_data
-            mock_client.return_value.__aenter__.return_value.post.return_value.raise_for_status.return_value = None
-            
-            result = await datadog_client.fetch_logs(filters=filters)
-            
-            assert isinstance(result, list)
-            # Verify filter was applied (would be in the request payload)
-            mock_client.return_value.__aenter__.return_value.post.assert_called_once()
+
+        with mock_logs_api([LOGS_PAYLOAD["data"][0]]) as api:
+            await datadog_client.fetch_logs(filters=filters)
+
+            body = api.list_logs.call_args.kwargs["body"]
+            query = body["filter"]["query"]
+            assert "service:web-app" in query
+            assert "env:production" in query
+            assert "status:error" in query
+
+    @pytest.mark.asyncio
+    async def test_fetch_logs_defaults_to_match_all(self, mock_logs_api):
+        """Test that no filters yields a match-all query"""
+        with mock_logs_api() as api:
+            result = await datadog_client.fetch_logs()
+
+            assert result["data"] == []
+            body = api.list_logs.call_args.kwargs["body"]
+            assert body["filter"]["query"] == "*"
 
 
 class TestLogToolHandler:
     """Test the get_logs tool handler"""
-    
+
     @pytest.mark.asyncio
     async def test_handle_logs_request_success(self):
         """Test successful log request handling"""
-        # Mock request
         mock_request = MagicMock()
         mock_request.arguments = {
             "query": "error",
@@ -114,31 +105,17 @@ class TestLogToolHandler:
             "limit": 100,
             "format": "table"
         }
-        
-        # Mock log data
-        mock_logs = [
-            {
-                "timestamp": "2023-01-01T12:00:00Z",
-                "message": "Error in application",
-                "service": "web-app",
-                "status": "error"
-            }
-        ]
-        
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_logs
-            
+
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = LOGS_PAYLOAD
+
             result = await get_logs.handle_call(mock_request)
-            
+
             assert isinstance(result, CallToolResult)
-            assert result.isError is False
-            assert len(result.content) > 0
+            assert result.is_error is False
             assert isinstance(result.content[0], TextContent)
-            
-            # Should contain log information
-            content_text = result.content[0].text
-            assert "Error in application" in content_text or "error" in content_text.lower()
-    
+            assert "Error in application" in result.content[0].text
+
     @pytest.mark.asyncio
     async def test_handle_logs_request_with_json_format(self):
         """Test log request with JSON format"""
@@ -148,32 +125,15 @@ class TestLogToolHandler:
             "format": "json",
             "limit": 50
         }
-        
-        mock_logs = [
-            {
-                "timestamp": "2023-01-01T12:00:00Z",
-                "message": "Info message",
-                "service": "api",
-                "status": "info"
-            }
-        ]
-        
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_logs
-            
+
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = LOGS_PAYLOAD
+
             result = await get_logs.handle_call(mock_request)
-            
-            assert isinstance(result, CallToolResult)
-            assert result.isError is False
-            
-            content_text = result.content[0].text
-            # Should be valid JSON when format is json
-            if mock_request.arguments.get("format") == "json":
-                try:
-                    json.loads(content_text)
-                except json.JSONDecodeError:
-                    pytest.fail("Response should be valid JSON when format=json")
-    
+
+            assert result.is_error is False
+            json.loads(result.content[0].text)
+
     @pytest.mark.asyncio
     async def test_handle_logs_request_error(self):
         """Test error handling in log requests"""
@@ -182,17 +142,15 @@ class TestLogToolHandler:
             "query": "test",
             "time_range": "1h"
         }
-        
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
             mock_fetch.side_effect = Exception("API error")
-            
+
             result = await get_logs.handle_call(mock_request)
-            
-            assert isinstance(result, CallToolResult)
-            assert result.isError is True
-            assert len(result.content) > 0
+
+            assert result.is_error is True
             assert "error" in result.content[0].text.lower()
-    
+
     @pytest.mark.asyncio
     async def test_handle_logs_request_empty_results(self):
         """Test handling when no logs are found"""
@@ -201,18 +159,14 @@ class TestLogToolHandler:
             "query": "nonexistent",
             "time_range": "1h"
         }
-        
-        with patch('datadog_mcp.utils.datadog_client.fetch_logs', new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = []
-            
+
+        with patch('datadog_mcp.tools.get_logs.fetch_logs', new_callable=AsyncMock) as mock_fetch:
+            mock_fetch.return_value = {"data": [], "meta": {}}
+
             result = await get_logs.handle_call(mock_request)
-            
-            assert isinstance(result, CallToolResult)
-            assert result.isError is False
-            assert len(result.content) > 0
-            
-            content_text = result.content[0].text
-            assert "no logs" in content_text.lower() or "no results" in content_text.lower()
+
+            assert result.is_error is False
+            assert "no logs" in result.content[0].text.lower()
 
 
 class TestLogFormatting:
@@ -269,46 +223,35 @@ class TestLogFormatting:
 
 class TestLogFiltering:
     """Test log filtering functionality"""
-    
+
     @pytest.mark.asyncio
-    async def test_logs_with_service_filter(self):
+    async def test_logs_with_service_filter(self, mock_logs_api):
         """Test filtering logs by service"""
-        filters = {"service": "web-api"}
-        
-        with patch('datadog_mcp.utils.datadog_client.httpx.AsyncClient') as mock_client:
-            mock_response = {
-                "data": [
-                    {
-                        "attributes": {
-                            "message": "API request",
-                            "service": "web-api"
-                        }
-                    }
-                ]
-            }
-            mock_client.return_value.__aenter__.return_value.post.return_value.json.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value.post.return_value.raise_for_status.return_value = None
-            
-            result = await datadog_client.fetch_logs(filters=filters)
-            
-            # Verify the request was made with proper filters
-            call_args = mock_client.return_value.__aenter__.return_value.post.call_args
-            assert call_args is not None
-    
+        with mock_logs_api([LOGS_PAYLOAD["data"][0]]) as api:
+            await datadog_client.fetch_logs(filters={"service": "web-api"})
+
+            body = api.list_logs.call_args.kwargs["body"]
+            assert body["filter"]["query"] == "service:web-api"
+
     @pytest.mark.asyncio
-    async def test_logs_with_time_range(self):
+    async def test_logs_with_time_range(self, mock_logs_api):
         """Test filtering logs by time range"""
-        time_range = "4h"
-        
-        with patch('datadog_mcp.utils.datadog_client.httpx.AsyncClient') as mock_client:
-            mock_response = {"data": []}
-            mock_client.return_value.__aenter__.return_value.post.return_value.json.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value.post.return_value.raise_for_status.return_value = None
-            
-            result = await datadog_client.fetch_logs(time_range=time_range)
-            
-            # Verify the request was made
-            mock_client.return_value.__aenter__.return_value.post.assert_called_once()
+        with mock_logs_api() as api:
+            await datadog_client.fetch_logs(time_range="4h")
+
+            body = api.list_logs.call_args.kwargs["body"]
+            assert body["filter"]._from == "now-4h"
+            assert body["filter"].to == "now"
+
+    @pytest.mark.asyncio
+    async def test_logs_pagination_cursor(self, mock_logs_api):
+        """Test that limit and cursor reach the request page options"""
+        with mock_logs_api() as api:
+            await datadog_client.fetch_logs(limit=25, cursor="abc123")
+
+            body = api.list_logs.call_args.kwargs["body"]
+            assert body["page"]["limit"] == 25
+            assert body["page"]["cursor"] == "abc123"
 
 
 if __name__ == "__main__":

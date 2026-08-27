@@ -6,7 +6,7 @@ import pytest
 import os
 from unittest.mock import patch, MagicMock
 from datadog_mcp.server import TOOLS, handle_list_tools, handle_call_tool
-from mcp.types import Tool, TextContent
+from mcp.types import CallToolRequestParams, Tool, TextContent
 
 
 class TestBasicIntegration:
@@ -35,8 +35,9 @@ class TestBasicIntegration:
     @pytest.mark.asyncio
     async def test_list_tools_returns_valid_definitions(self):
         """Test that list_tools returns valid Tool objects"""
-        tools = await handle_list_tools()
-        
+        result = await handle_list_tools(None, None)
+        tools = result.tools
+
         assert isinstance(tools, list)
         assert len(tools) == len(TOOLS)
         
@@ -44,7 +45,7 @@ class TestBasicIntegration:
             assert isinstance(tool, Tool)
             assert hasattr(tool, 'name')
             assert hasattr(tool, 'description')
-            assert hasattr(tool, 'inputSchema')
+            assert hasattr(tool, 'input_schema')
     
     @pytest.mark.asyncio
     async def test_tool_definitions_are_valid(self):
@@ -55,8 +56,8 @@ class TestBasicIntegration:
             assert isinstance(tool_def, Tool)
             assert tool_def.name == tool_name
             assert len(tool_def.description) > 0
-            assert isinstance(tool_def.inputSchema, dict)
-            assert "properties" in tool_def.inputSchema
+            assert isinstance(tool_def.input_schema, dict)
+            assert "properties" in tool_def.input_schema
 
 
 class TestToolHandling:
@@ -65,12 +66,14 @@ class TestToolHandling:
     @pytest.mark.asyncio
     async def test_handle_unknown_tool(self):
         """Test handling of unknown tools"""
-        result = await handle_call_tool("unknown_tool", {})
-        
-        assert isinstance(result, list)
-        assert len(result) == 1
-        assert isinstance(result[0], TextContent)
-        assert "Unknown tool" in result[0].text
+        result = await handle_call_tool(
+            None, CallToolRequestParams(name="unknown_tool", arguments={})
+        )
+
+        assert result.is_error
+        assert len(result.content) == 1
+        assert isinstance(result.content[0], TextContent)
+        assert "Unknown tool" in result.content[0].text
     
     @pytest.mark.asyncio
     async def test_handle_tool_with_empty_arguments(self):
@@ -86,11 +89,12 @@ class TestToolHandling:
                 mock_response.raise_for_status.return_value = None
                 mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
                 
-                result = await handle_call_tool(tool_name, {})
-                
-                assert isinstance(result, list)
-                assert len(result) >= 1
-                assert isinstance(result[0], TextContent)
+                result = await handle_call_tool(
+                    None, CallToolRequestParams(name=tool_name, arguments={})
+                )
+
+                assert len(result.content) >= 1
+                assert isinstance(result.content[0], TextContent)
 
 
 class TestEnvironmentHandling:
@@ -125,7 +129,7 @@ class TestToolParameters:
         """Test that all tools have proper schema structure"""
         for tool_name, tool_config in TOOLS.items():
             tool_def = tool_config["definition"]()
-            schema = tool_def.inputSchema
+            schema = tool_def.input_schema
             
             # Basic schema validation
             assert isinstance(schema, dict)
@@ -146,7 +150,7 @@ class TestToolParameters:
         for tool_name in format_tools:
             if tool_name in TOOLS:
                 tool_def = TOOLS[tool_name]["definition"]()
-                properties = tool_def.inputSchema.get("properties", {})
+                properties = tool_def.input_schema.get("properties", {})
                 assert "format" in properties, f"Tool {tool_name} missing format parameter"
 
 
@@ -157,22 +161,24 @@ class TestErrorHandling:
     async def test_tool_exception_handling(self):
         """Test that tool exceptions are properly handled"""
         # Create a mock tool that raises an exception
-        def failing_handler(request):
+        async def failing_handler(params):
             raise Exception("Test error")
         
         original_tools = TOOLS.copy()
         TOOLS["test_failing_tool"] = {
-            "definition": lambda: Tool(name="test_failing_tool", description="Test", inputSchema={}),
+            "definition": lambda: Tool(name="test_failing_tool", description="Test", input_schema={}),
             "handler": failing_handler
         }
         
         try:
-            result = await handle_call_tool("test_failing_tool", {})
-            
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert isinstance(result[0], TextContent)
-            assert "Error" in result[0].text
+            result = await handle_call_tool(
+                None, CallToolRequestParams(name="test_failing_tool", arguments={})
+            )
+
+            assert result.is_error
+            assert len(result.content) == 1
+            assert isinstance(result.content[0], TextContent)
+            assert "Error" in result.content[0].text
             
         finally:
             # Restore original tools
